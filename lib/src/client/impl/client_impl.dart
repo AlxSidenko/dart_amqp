@@ -12,6 +12,7 @@ class _ClientImpl implements Client {
   // The connection to the server
   int _connectionAttempt = 0;
   Socket? _socket;
+  WebSocketChannel? _webSocketChannel;
 
   // The list of open channels. Channel 0 is always reserved for signaling
   final Map<int, _ChannelImpl> _channels = <int, _ChannelImpl>{};
@@ -44,8 +45,37 @@ class _ClientImpl implements Client {
   Future _reconnect() {
     _connected ??= Completer();
 
-    Future<Socket> fs;
-    if (settings.tlsContext != null) {
+    Future<Socket>? fs;
+    if (kIsWeb) {
+      try {
+        WebSocketChannel webSocketChannel =
+            WebSocketChannel.connect(Uri.parse(settings.host));
+
+        webSocketChannel.ready.then(
+          (value) {
+            _webSocketChannel = webSocketChannel;
+
+            // Bind processors and initiate handshake
+            RawFrameParser(tuningSettings)
+                .transformer
+                .bind(_webSocketChannel!.stream)
+                .transform(AmqpMessageDecoder().transformer)
+                .listen(_handleMessage,
+                    onError: _handleException,
+                    onDone: () => _handleException(
+                        const SocketException("Socket closed")));
+
+            // Allocate channel 0 for handshaking and transmit the AMQP header to bootstrap the handshake
+            _channels.clear();
+            _channels.putIfAbsent(0, () => _ChannelImpl(0, this));
+          },
+        ).catchError((err, trace) {
+          _reconnectionOnError();
+        });
+      } catch (e) {
+        print(e);
+      }
+    } else if (settings.tlsContext != null) {
       connectionLogger.info(
           "Trying to connect to ${settings.host}:${settings.port} using TLS [attempt ${_connectionAttempt + 1}/${settings.maxConnectionAttempts}]");
       fs = SecureSocket.connect(
@@ -62,7 +92,7 @@ class _ClientImpl implements Client {
           timeout: settings.connectTimeout);
     }
 
-    fs.then((Socket s) {
+    fs?.then((Socket s) {
       _socket = s;
 
       // Bind processors and initiate handshake
@@ -79,32 +109,44 @@ class _ClientImpl implements Client {
       _channels.clear();
       _channels.putIfAbsent(0, () => _ChannelImpl(0, this));
     }).catchError((err, trace) {
-      // Connection attempt completed with an error (probably protocol mismatch)
-      if (_connected!.isCompleted) {
-        return;
-      }
-
-      if (++_connectionAttempt >= settings.maxConnectionAttempts) {
-        String errorMessage =
-            "Could not connect to ${settings.host}:${settings.port} after ${settings.maxConnectionAttempts} attempts. Giving up";
-        connectionLogger.severe(errorMessage);
-        _connected!.completeError(ConnectionFailedException(errorMessage));
-
-        // Clear _connected future so the client can invoke open() in the future
-        _connected = null;
-      } else {
-        // Retry after reconnectWaitTime ms
-        Timer(settings.reconnectWaitTime, _reconnect);
-      }
+      _reconnectionOnError();
     });
 
     return _connected!.future;
   }
 
+  Future _reconnectionOnError() async {
+    // Connection attempt completed with an error (probably protocol mismatch)
+    if (_connected!.isCompleted) {
+      return;
+    }
+
+    if (++_connectionAttempt >= settings.maxConnectionAttempts) {
+      String errorMessage;
+      if (kIsWeb) {
+        errorMessage =
+            "Could not connect to ${settings.host} after ${settings.maxConnectionAttempts} attempts. Giving up";
+      } else {
+        errorMessage =
+            "Could not connect to ${settings.host}:${settings.port} after ${settings.maxConnectionAttempts} attempts. Giving up";
+      }
+      connectionLogger.severe(errorMessage);
+      _connected!.completeError(ConnectionFailedException(errorMessage));
+
+      // Clear _connected future so the client can invoke open() in the future
+      _connected = null;
+    } else {
+      // Retry after reconnectWaitTime ms
+      Timer(settings.reconnectWaitTime, _reconnect);
+    }
+  }
+
   /// Check if a connection is currently in handshake state
   @override
   bool get handshaking =>
-      _socket != null && _connected != null && !_connected!.isCompleted;
+      (_socket != null || _webSocketChannel != null) &&
+      _connected != null &&
+      !_connected!.isCompleted;
 
   void _handleMessage(DecodedMessage serverMessage) {
     try {
@@ -283,7 +325,7 @@ class _ClientImpl implements Client {
     _heartbeatRecvTimer?.cancel();
     _heartbeatRecvTimer = null;
 
-    if (_socket == null) {
+    if (_socket == null && _webSocketChannel == null) {
       return Future.value();
     }
 
@@ -298,11 +340,15 @@ class _ClientImpl implements Client {
             .toList()
             .reversed
             .map((_ChannelImpl channel) => channel.close()))
-        .then((_) => _socket!.flush())
-        .then((_) => _socket!.close(), onError: (e) {
+        .then((_) => _socket?.flush())
+        .then((_) {
+      _webSocketChannel?.sink.close();
+      _socket?.close();
+    }, onError: (e) {
       // Mute exception as the socket may be already closed
     }).whenComplete(() {
-      _socket!.destroy();
+      _webSocketChannel = null;
+      _socket?.destroy();
       _socket = null;
       _connected = null;
       if (closeErrorStream) {

@@ -50,25 +50,32 @@ class _ChannelImpl implements Channel {
     _pendingOperationPayloads.add(this);
 
     // Transmit handshake
-    _frameWriter
-      ..writeProtocolHeader(
-          _client.settings.amqpProtocolVersion,
-          _client.settings.amqpMajorVersion,
-          _client.settings.amqpMinorVersion,
-          _client.settings.amqpRevision)
-      ..pipe(_client._socket!);
+    _frameWriter.writeProtocolHeader(
+        _client.settings.amqpProtocolVersion,
+        _client.settings.amqpMajorVersion,
+        _client.settings.amqpMinorVersion,
+        _client.settings.amqpRevision);
+    if (kIsWeb) {
+      _frameWriter.pipe(_client._webSocketChannel!.sink);
+    } else {
+      _frameWriter.pipe(_client._socket!);
+    }
   }
 
   void writeHeartbeat() {
-    if (_channelClosed != null || _client._socket == null) {
+    if (_channelClosed != null ||
+        (_client._socket == null && _client._webSocketChannel == null)) {
       return; // no-op
     }
 
     // Transmit heartbeat
     try {
-      _frameWriter
-        ..writeHeartbeat()
-        ..pipe(_client._socket!);
+      _frameWriter.writeHeartbeat();
+      if (kIsWeb) {
+        _frameWriter.pipe(_client._webSocketChannel!.sink);
+      } else {
+        _frameWriter.pipe(_client._socket!);
+      }
     } catch (_) {
       // An exception will be raised if we attempt to send a hearbeat
       // immediately after the connection to the server is lost. We can safely
@@ -104,10 +111,14 @@ class _ChannelImpl implements Channel {
       _nextPublishSeqNo++;
     }
 
-    _frameWriter
-      ..writeMessage(channelId, message,
-          properties: properties, payloadContent: payloadContent)
-      ..pipe(_client._socket!);
+    _frameWriter.writeMessage(channelId, message,
+        properties: properties, payloadContent: payloadContent);
+
+    if (kIsWeb) {
+      _frameWriter.pipe(_client._webSocketChannel!.sink);
+    } else {
+      _frameWriter.pipe(_client._socket!);
+    }
 
     // If the noWait flag was specified, complete the future now. The broken
     // will raise any errors asynchronously via the channel or connection.
