@@ -49,7 +49,7 @@ class _ClientImpl implements Client {
     if (kIsWeb) {
       try {
         WebSocketChannel webSocketChannel =
-            WebSocketChannel.connect(Uri.parse(settings.host));
+            WebSocketChannel.connect(Uri.parse(settings.uri!));
 
         webSocketChannel.ready.then(
           (value) {
@@ -80,7 +80,7 @@ class _ClientImpl implements Client {
           "Trying to connect to ${settings.host}:${settings.port} using TLS [attempt ${_connectionAttempt + 1}/${settings.maxConnectionAttempts}]");
       fs = SecureSocket.connect(
         settings.host,
-        settings.port,
+        settings.port!,
         timeout: settings.connectTimeout,
         context: settings.tlsContext,
         onBadCertificate: settings.onBadCertificate,
@@ -88,7 +88,7 @@ class _ClientImpl implements Client {
     } else {
       connectionLogger.info(
           "Trying to connect to ${settings.host}:${settings.port} [attempt ${_connectionAttempt + 1}/${settings.maxConnectionAttempts}]");
-      fs = Socket.connect(settings.host, settings.port,
+      fs = Socket.connect(settings.host, settings.port!,
           timeout: settings.connectTimeout);
     }
 
@@ -125,7 +125,7 @@ class _ClientImpl implements Client {
       String errorMessage;
       if (kIsWeb) {
         errorMessage =
-            "Could not connect to ${settings.host} after ${settings.maxConnectionAttempts} attempts. Giving up";
+            "Could not connect to ${settings.uri} after ${settings.maxConnectionAttempts} attempts. Giving up";
       } else {
         errorMessage =
             "Could not connect to ${settings.host}:${settings.port} after ${settings.maxConnectionAttempts} attempts. Giving up";

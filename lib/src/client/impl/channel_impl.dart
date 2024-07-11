@@ -155,6 +155,16 @@ class _ChannelImpl implements Channel {
             "platform": "Dart/${Platform.operatingSystem}",
             if (_client.settings.connectionName != null)
               "connection_name": _client.settings.connectionName!,
+            if (kIsWeb)
+              "capabilities": {
+                "authentication_failure_close": true,
+                "basic.nack": true,
+                "connection.blocked": true,
+                "consumer_cancel_notify": true,
+                "exchange_exchange_bindings": true,
+                "per_consumer_qos": true,
+                "publisher_confirms": true,
+              }
           }
           ..locale = 'en_US'
           ..mechanism = _client.settings.authProvider.saslType

@@ -2,10 +2,13 @@ part of "../client.dart";
 
 class ConnectionSettings {
   // The host to connect to
-  String host;
+  String? host;
+
+  // The uri to connect to websocket
+  String? uri;
 
   // The port to connect to
-  int port;
+  int? port;
 
   // The connection vhost that will be sent to the server
   String virtualHost;
@@ -39,8 +42,9 @@ class ConnectionSettings {
   Duration? connectTimeout;
 
   ConnectionSettings({
-    this.host = "127.0.0.1",
-    this.port = 5672,
+    this.host,
+    this.uri,
+    this.port,
     this.virtualHost = "/",
     this.authProvider = const PlainAuthenticator("guest", "guest"),
     this.maxConnectionAttempts = 1,
