@@ -14,7 +14,6 @@ import "dart:math" as math;
 
 // Internal lib dependencies
 import "package:dart_amqp/src/uint64_converter.dart";
-import "package:dart_amqp/src/utils.dart";
 
 import "enums.dart";
 import "exceptions.dart";

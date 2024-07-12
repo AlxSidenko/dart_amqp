@@ -52,6 +52,7 @@ class TypeEncoder {
   }
 
   void writeUInt64(int value) {
+    const kIsWeb = bool.fromEnvironment('dart.library.js_util');
     if (kIsWeb) {
       _writer.addLast(Uint64Converter.uint64ToUint8List(value));
     } else {
