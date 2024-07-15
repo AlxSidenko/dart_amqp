@@ -51,7 +51,7 @@ class _ClientImpl implements Client {
         connectionLogger.info(
             "Trying to connect to ${settings.uri} [attempt ${_connectionAttempt + 1}/${settings.maxConnectionAttempts}]");
         WebSocketChannel webSocketChannel =
-            WebSocketChannel.connect(Uri.parse(settings.uri!));
+            WebSocketChannel.connect(settings.uri!);
 
         webSocketChannel.ready.then(
           (value) {

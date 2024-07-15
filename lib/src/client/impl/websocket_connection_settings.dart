@@ -11,7 +11,7 @@ class WebsocketConnectionSettings implements BaseConnectionSettings{
 
   // The uri to connect to websocket. Use either host and url
   @override
-  String? uri;
+  Uri? uri;
 
   // The connection vhost that will be sent to the server
   @override

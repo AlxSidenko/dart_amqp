@@ -8,7 +8,7 @@ abstract class BaseConnectionSettings {
   int? port;
 
   // The uri to connect to websocket. Use either host and url
-  String? uri;
+  Uri? uri;
 
   // The connection vhost that will be sent to the server
   abstract String virtualHost;
